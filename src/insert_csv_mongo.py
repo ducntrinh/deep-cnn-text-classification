@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import csv
 import progressbar
+import pandas as pd
 from argparse import ArgumentParser
 from concurrent.futures import ThreadPoolExecutor
 from pymongo import MongoClient
@@ -15,7 +15,7 @@ widgets = [
 bar = progressbar.ProgressBar(
     max_value=progressbar.UnknownLength, widgets=widgets)
 
-executor = ThreadPoolExecutor(max_workers=4)
+executor = ThreadPoolExecutor(max_workers=8)
 
 
 def get_args():
@@ -49,10 +49,11 @@ def insert_document(document, database_name, collection_name):
 def main():
     file_path, database_name, collection_name = get_args()
 
-    with open(file_path) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        document_id = 0
-        for row in csv_reader:
+    reader = pd.read_csv(file_path, header=None, chunksize=32, iterator=True)
+    document_id = 0
+    for chunk in reader:
+        df = pd.DataFrame(chunk)
+        for index, row in df.iterrows():
             document = {
                 '_id': document_id,
                 'review': row[1],
@@ -60,7 +61,7 @@ def main():
             }
             executor.submit(insert_document, document, database_name,
                             collection_name)
-            #insert_document(document, database_name, collection_name)
+            # insert_document(document, database_name, collection_name)
             document_id += 1
     executor.shutdown()
     bar.finish()
