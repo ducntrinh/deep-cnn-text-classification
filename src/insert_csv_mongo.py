@@ -124,7 +124,7 @@ def clean_and_insert_collection(directory, database_name, collection_name):
     for chunk in reader:
         data_frame = pd.DataFrame(chunk)
         for _, row in data_frame.iterrows():
-            raw_text = row[1]
+            raw_text = str(row[1])
             cleaned_text = clean_text(raw_text)
 
             # Insert to database
