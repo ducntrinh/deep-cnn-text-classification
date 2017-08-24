@@ -1,40 +1,42 @@
 #!/usr/bin/env python3
 
 # Import
+import numpy as np
+from gensim.models import KeyedVectors
 from keras.preprocessing import sequence
 from keras.callbacks import CSVLogger
 from pymongo import MongoClient
-import numpy as np
 
 from deep_text_cnn import DeepTextCNN
 
 # Load database
 mongo_client = MongoClient()
-database = mongo_client.get_database('yelpf')
+database = mongo_client.get_database('test')
 train_collection = database.get_collection('train')
 test_collection = database.get_collection('test')
+vocab_collection = database.get_collection('vocab')
 
+EMBEDDING_FILE = '/home/ductn/Downloads/GoogleNews-vectors-negative300.bin'
 SEQUENCE_LENGTH = 200
-NUM_CLASSES = 2
+NUM_CLASSES = 5
 
-train_size = train_collection.count()
-test_size = test_collection.count() 
+TRAIN_SIZE = train_collection.count()
+TEST_SIZE = test_collection.count()
+
 
 def rating_to_one_hot(rating):
-    if rating > 3:
-        return [1, 0]
-    else:
-        return [0, 1]
+    one_hot = np.zeros(NUM_CLASSES)
+    one_hot[rating - 1] = 1
+    return one_hot
 
 
-def data_generator(start, end, batch_size):
+def data_generator(collection, batch_size):
     holder_x = np.zeros((batch_size, SEQUENCE_LENGTH))
     holder_y = np.zeros((batch_size, NUM_CLASSES))
     k = 0
 
     while True:
-        for i in range(start, end):
-            document = collection.find_one({'_id': i})
+        for document in collection.find({}):
             x = sequence.pad_sequences([document['sequence']], SEQUENCE_LENGTH)
             y = np.array([rating_to_one_hot(document['rating'])])
 
@@ -53,26 +55,42 @@ def data_generator(start, end, batch_size):
 VOCAB_SIZE = 30000
 EMBEDDING_SIZE = 300
 FILTER_SIZES = [3, 4, 5]
-FILTER_SIZE = 3
 NUM_FILTERS = 150
-NUM_UNITS = 150
 DROPOUT_KEEP_PROB = float(0.5)
 
+
+def prepare_embedding():
+    word2vec = KeyedVectors.load_word2vec_format(EMBEDDING_FILE, binary=True)
+
+    embedding_weights = np.zeros((VOCAB_SIZE, EMBEDDING_SIZE))
+    for document in vocab_collection.find({}):
+        word = document['word']
+        index = document['index']
+        if index > VOCAB_SIZE:
+            continue
+        if word in word2vec.vocab:
+            embedding_weights[index] = word2vec.word_vec(word)
+
+    return embedding_weights
+
+
+EMBEDDING_WEIGHTS = prepare_embedding()
 model = DeepTextCNN(SEQUENCE_LENGTH, NUM_CLASSES, VOCAB_SIZE, EMBEDDING_SIZE,
-                  FILTER_SIZE, NUM_FILTERS, NUM_UNITS, DROPOUT_KEEP_PROB)
+                    EMBEDDING_WEIGHTS, FILTER_SIZES, NUM_FILTERS,
+                    DROPOUT_KEEP_PROB)
 
 # Train
 BATCH_SIZE = 128
 EPOCHS = 10
-steps_per_epoch = train_size / BATCH_SIZE
-validation_steps = test_size / BATCH_SIZE
+STEPS_PER_EPOCH = TRAIN_SIZE / BATCH_SIZE
+VALIDATION_STEPS = TEST_SIZE / BATCH_SIZE
 
-csv_logger = CSVLogger('log.csv', append=True, separator=';')
+CSV_LOGGER = CSVLogger('log.csv', append=True, separator=';')
 model.summary()
 model.fit_generator(
-    data_generator(train_start, train_end, BATCH_SIZE),
-    steps_per_epoch=steps_per_epoch,
+    data_generator(train_collection, BATCH_SIZE),
+    steps_per_epoch=STEPS_PER_EPOCH,
     epochs=EPOCHS,
-    validation_data=data_generator(test_start, test_end, BATCH_SIZE),
-    validation_steps=validation_steps,
-    callbacks=[csv_logger])
+    validation_data=data_generator(test_collection, BATCH_SIZE),
+    validation_steps=VALIDATION_STEPS,
+    callbacks=[CSV_LOGGER])
