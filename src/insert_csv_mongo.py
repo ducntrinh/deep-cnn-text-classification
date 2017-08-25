@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import progressbar
 import pandas as pd
 import re
 from argparse import ArgumentParser

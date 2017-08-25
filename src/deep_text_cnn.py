@@ -45,8 +45,8 @@ def DeepTextCNN(sequence_length, num_classes, vocab_size, embedding_size,
 
     # Convolutional & max pool layers
     conv1 = Conv1D(
-        filters=num_filters, kernel_size=3, activation='relu')(concat)
-    pool1 = MaxPooling1D(pool_size=3)(conv1)
+        filters=num_filters, kernel_size=5, activation='relu')(concat)
+    pool1 = MaxPooling1D(pool_size=5)(conv1)
     conv2 = Conv1D(
         filters=num_filters, kernel_size=5, activation='relu')(pool1)
     pool2 = MaxPooling1D(pool_size=5)(conv2)
