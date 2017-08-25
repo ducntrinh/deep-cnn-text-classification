@@ -78,7 +78,7 @@ def prepare_embedding():
     for document in VOCAB_COLLECTION.find({}):
         word = document['word']
         index = document['index']
-        if index > VOCAB_SIZE:
+        if index >= VOCAB_SIZE:
             continue
         if word in word2vec.vocab:
             embedding_weights[index] = word2vec.word_vec(word)
