@@ -12,14 +12,10 @@ from tqdm import tqdm
 
 mongo_client = MongoClient(maxPoolSize=None)
 
-widgets = [
-    progressbar.RotatingMarker(), progressbar.Counter('Inserted: %(value)05d'),
-    ' reviews (', progressbar.Timer(), ')'
-]
-bar = progressbar.ProgressBar(
-    max_value=progressbar.UnknownLength, widgets=widgets)
+pbar = None
 
 tokenizer = None
+
 
 
 def get_args():
@@ -108,11 +104,11 @@ def clean_text(text, remove_stopwords=True, stem_words=True):
 
 
 def clean_and_insert(directory, database_name):
-    clean_and_insert_collection(directory, database_name, 'train')
-    clean_and_insert_collection(directory, database_name, 'test')
+    clean_and_insert_with_collection(directory, database_name, 'train')
+    clean_and_insert_with_collection(directory, database_name, 'test')
 
 
-def clean_and_insert_collection(directory, database_name, collection_name):
+def clean_and_insert_with_collection(directory, database_name, collection_name):
     file_path = directory + '/' + collection_name + '.csv'
     collection = get_collection(database_name, collection_name)
 
@@ -121,6 +117,7 @@ def clean_and_insert_collection(directory, database_name, collection_name):
         desc='Clean and insert in collection {}'.format(collection_name),
         unit=' items')
     document_id = 0
+    document_holder = []
     for chunk in reader:
         data_frame = pd.DataFrame(chunk)
         for _, row in data_frame.iterrows():
@@ -134,10 +131,12 @@ def clean_and_insert_collection(directory, database_name, collection_name):
                 'cleaned': cleaned_text,
                 'rating': int(row[0])
             }
-            collection.insert_one(mongo_document)
+            document_holder.append(mongo_document)
+            # collection.insert_one(mongo_document)
 
-            # Fit cleaned text into tokenizer
-            tokenizer.fit_on_texts([cleaned_text])
+            if len(document_holder) % 10000 == 0:
+                collection.insert_many(document_holder)
+                document_holder = []
 
             # Update progress bar
             progress_bar.update()
@@ -145,7 +144,31 @@ def clean_and_insert_collection(directory, database_name, collection_name):
             # Increase document
             document_id += 1
 
+    if len(document_holder) != 0:
+        collection.insert_many(document_holder)
+
     progress_bar.close()
+
+def cleaned_text_generator(database_name, collection_name):
+    global pbar
+    collection = get_collection(database_name, collection_name)
+    for document in collection.find({}):
+        pbar.update()
+        yield document['cleaned']
+
+def fit_texts_to_tokenizer(database_name):
+    global pbar
+    pbar = tqdm(
+        desc='Fit cleaned text on collection train',
+        unit=' items')
+    tokenizer.fit_on_texts(cleaned_text_generator(database_name, 'train'))
+    pbar.close()
+
+    pbar = tqdm(
+        desc='Fit cleaned text on collection test',
+        unit=' items')
+    tokenizer.fit_on_texts(cleaned_text_generator(database_name, 'test'))
+    pbar.close()
 
 
 def insert_vocabulary(database_name):
@@ -155,11 +178,11 @@ def insert_vocabulary(database_name):
 
 
 def turn_sequence_and_insert(database_name):
-    turn_sequence_and_insert_collection(database_name, 'train')
-    turn_sequence_and_insert_collection(database_name, 'test')
+    turn_sequence_and_insert_with_collection(database_name, 'train')
+    turn_sequence_and_insert_with_collection(database_name, 'test')
 
 
-def turn_sequence_and_insert_collection(database_name, collection_name):
+def turn_sequence_and_insert_with_collection(database_name, collection_name):
     collection = get_collection(database_name, collection_name)
 
     progress_bar = tqdm(
@@ -185,6 +208,7 @@ def main():
     tokenizer = Tokenizer(num_words=num_words)
 
     clean_and_insert(directory, database_name)
+    fit_texts_to_tokenizer(database_name)
     insert_vocabulary(database_name)
     turn_sequence_and_insert(database_name)
 
