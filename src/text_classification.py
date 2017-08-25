@@ -56,7 +56,7 @@ def data_generator(collection, batch_size):
     k = 0
 
     while True:
-        for document in collection.find({}):
+        for document in collection.find({}, no_cursor_timeout=True):
             x = sequence.pad_sequences([document['sequence']], SEQUENCE_LENGTH)
             y = np.array([rating_to_one_hot(document['rating'])])
 
@@ -93,9 +93,12 @@ MODEL = DeepTextCNN(SEQUENCE_LENGTH, NUM_CLASSES, VOCAB_SIZE, EMBEDDING_SIZE,
 
 # Train
 BATCH_SIZE = 128
-EPOCHS = 10
-STEPS_PER_EPOCH = TRAIN_SIZE / BATCH_SIZE
-VALIDATION_STEPS = TEST_SIZE / BATCH_SIZE
+EPOCHS = 20
+STEPS_PER_EPOCH = int(TRAIN_SIZE / BATCH_SIZE)
+VALIDATION_STEPS = int(TEST_SIZE / BATCH_SIZE)
+print(TEST_SIZE)
+print(VALIDATION_STEPS)
+
 
 CSV_LOGGER = CSVLogger(DATABASE_NAME + '_log.csv', append=True, separator=',')
 MODEL.summary()
