@@ -34,12 +34,12 @@ def DeepTextCNN(sequence_length, num_classes, vocab_size, embedding_size,
     pooled_outputs = []
     for i, filter_size in enumerate(filter_sizes):
         conv = Conv1D(
-            filters=50,
+            filters=100,
             kernel_size=filter_size,
             activation='relu',
             padding='same',
             kernel_regularizer=regularizers.l2(0.0001))(embedding)
-        pooled = MaxPooling1D(pool_size=3)(conv)
+        pooled = MaxPooling1D(pool_size=2)(conv)
         dropout_pooled = Dropout(0.1)(pooled)
         pooled_outputs.append(dropout_pooled)
 
