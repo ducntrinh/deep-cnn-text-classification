@@ -3,6 +3,7 @@ from keras.layers import Input, Dense, Embedding, Conv1D, MaxPooling1D, Dropout
 from keras.layers.core import Reshape, Flatten
 from keras.layers.merge import Concatenate
 from keras.optimizers import Adam
+from keras import regularizers
 from keras.models import Model
 import keras.backend as K
 from sklearn import metrics
@@ -33,22 +34,25 @@ def DeepTextCNN(sequence_length, num_classes, vocab_size, embedding_size,
     pooled_outputs = []
     for i, filter_size in enumerate(filter_sizes):
         conv = Conv1D(
-            filters=num_filters,
+            filters=50,
             kernel_size=filter_size,
             activation='relu',
-            padding='same')(embedding)
-        pooled = MaxPooling1D(pool_size=2)(conv)
-        pooled_outputs.append(pooled)
+            padding='same',
+            kernel_regularizer=regularizers.l2(0.0001))(embedding)
+        pooled = MaxPooling1D(pool_size=3)(conv)
+        dropout_pooled = Dropout(0.1)(pooled)
+        pooled_outputs.append(dropout_pooled)
 
     # Merge pooled output
     concat = Concatenate(axis=2)(pooled_outputs)
 
     # Convolutional & max pool layers
     conv1 = Conv1D(
-        filters=num_filters, kernel_size=5, activation='relu')(concat)
+        filters=100, kernel_size=5, activation='relu', kernel_regularizer=regularizers.l2(0.0001))(concat)
     pool1 = MaxPooling1D(pool_size=5)(conv1)
+    dropout_pool1 = Dropout(0.2)(pool1)
     conv2 = Conv1D(
-        filters=num_filters, kernel_size=5, activation='relu')(pool1)
+        filters=100, kernel_size=5, activation='relu', kernel_regularizer=regularizers.l2(0.0001))(dropout_pool1)
     pool2 = MaxPooling1D(pool_size=5)(conv2)
 
     flatten = Flatten()(pool2)
@@ -57,7 +61,7 @@ def DeepTextCNN(sequence_length, num_classes, vocab_size, embedding_size,
     dropout = Dropout(dropout_keep_prob)(flatten)
 
     # Output layer
-    outputs = Dense(activation='softmax', units=num_classes)(dropout)
+    outputs = Dense(activation='softmax', units=num_classes, kernel_regularizer=regularizers.l2(0.0001))(dropout)
 
     # Create model from input and output
     model = Model(inputs=inputs, outputs=outputs)
